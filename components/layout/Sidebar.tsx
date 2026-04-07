@@ -7,6 +7,7 @@ import {
   LayoutDashboard, 
   ShoppingCart, 
   Package, 
+  Layers,
   Users, 
   UserSquare2, 
   FileText, 
@@ -18,7 +19,10 @@ import {
   Truck,
   Undo2,
   Wallet,
-  Calculator
+  Calculator,
+  MessageSquare,
+  History,
+  CreditCard
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/hooks/use-auth';
@@ -28,13 +32,15 @@ const menuItems = [
   { name: 'POS Furniture', icon: ShoppingCart, href: '/pos-furniture' },
   { name: 'POS Wood', icon: ShoppingCart, href: '/pos-wood' },
   { name: 'Invoices', icon: FileText, href: '/invoices' },
-  { name: 'Estimates', icon: Calculator, href: '/estimates' },
-  { name: 'Returns', icon: Undo2, href: '/returns' },
+  { name: 'Bills', icon: Receipt, href: '/bills' },
   { name: 'Inventory', icon: Package, href: '/inventory' },
+  { name: 'Categories', icon: Layers, href: '/categories' },
   { name: 'Customers', icon: Users, href: '/customers' },
+  { name: 'Customer Statement', icon: History, href: '/customer-statement' },
   { name: 'Staff', icon: UserSquare2, href: '/staff' },
-  { name: 'Vendors', icon: Truck, href: '/vendors' },
+  { name: 'Staff Statement', icon: CreditCard, href: '/staff-statement' },
   { name: 'Transactions', icon: Wallet, href: '/transactions' },
+  { name: 'SMS', icon: MessageSquare, href: '/sms' },
   { name: 'Reports', icon: BarChart3, href: '/reports' },
   { name: 'Settings', icon: Settings, href: '/settings' },
 ];

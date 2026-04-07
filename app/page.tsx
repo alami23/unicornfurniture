@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   TrendingUp, 
   TrendingDown, 
@@ -11,46 +11,118 @@ import {
   AlertCircle,
   Plus,
   ArrowUpRight,
-  ArrowDownRight
+  ArrowDownRight,
+  ShoppingCart
 } from 'lucide-react';
 import { 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
   Tooltip, 
   ResponsiveContainer,
   AreaChart,
-  Area
+  Area,
+  XAxis,
+  YAxis,
+  CartesianGrid
 } from 'recharts';
-import { formatCurrency } from '@/lib/utils';
-
-const data = [
-  { name: 'Jan', sales: 4000, expenses: 2400 },
-  { name: 'Feb', sales: 3000, expenses: 1398 },
-  { name: 'Mar', sales: 2000, expenses: 9800 },
-  { name: 'Apr', sales: 2780, expenses: 3908 },
-  { name: 'May', sales: 1890, expenses: 4800 },
-  { name: 'Jun', sales: 2390, expenses: 3800 },
-  { name: 'Jul', sales: 3490, expenses: 4300 },
-];
-
-const stats = [
-  { name: 'Total Sales', value: 1245000, change: '+12.5%', icon: TrendingUp, color: 'blue' },
-  { name: 'Active Orders', value: 42, change: '+5', icon: Clock, color: 'orange' },
-  { name: 'Total Customers', value: 856, change: '+18', icon: Users, color: 'green' },
-  { name: 'Low Stock Items', value: 12, change: '-2', icon: AlertCircle, color: 'red' },
-];
-
-const recentTransactions = [
-  { id: 'INV-2024-001', customer: 'Robert Knox', amount: 45000, status: 'paid', date: '2024-03-20' },
-  { id: 'INV-2024-002', customer: 'Sarah Ahmed', amount: 12500, status: 'partial', date: '2024-03-19' },
-  { id: 'INV-2024-003', customer: 'Karim Ullah', amount: 85000, status: 'unpaid', date: '2024-03-18' },
-  { id: 'INV-2024-004', customer: 'Zayed Khan', amount: 32000, status: 'paid', date: '2024-03-17' },
-];
+import { formatCurrency, cn } from '@/lib/utils';
+import { supabase } from '@/lib/supabase';
+import { format, subMonths, startOfMonth } from 'date-fns';
+import Link from 'next/link';
 
 export default function DashboardPage() {
+  const [stats, setStats] = useState([
+    { name: 'Total Sales', value: 0, change: '+0%', icon: TrendingUp, color: 'blue' },
+    { name: 'Active Orders', value: 0, change: '+0', icon: Clock, color: 'orange' },
+    { name: 'Total Customers', value: 0, change: '+0', icon: Users, color: 'green' },
+    { name: 'Low Stock Items', value: 0, change: '0', icon: AlertCircle, color: 'red' },
+  ]);
+
+  const [chartData, setChartData] = useState<any[]>([]);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [lowStockItems, setLowStockItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchDashboardData = useCallback(async () => {
+    setLoading(true);
+    try {
+      // 1. Fetch Stats
+      const [
+        { data: invoices },
+        { data: customers },
+        { data: products },
+        { data: transactions }
+      ] = await Promise.all([
+        supabase.from('invoices').select('total_amount, status, created_at, invoice_number, customer:customers(name)'),
+        supabase.from('customers').select('id'),
+        supabase.from('products').select('name, stock_quantity, min_stock_level, unit'),
+        supabase.from('transactions').select('amount, type, date')
+      ]);
+
+      const totalSales = (invoices || []).reduce((acc, inv) => acc + inv.total_amount, 0);
+      const activeOrders = (invoices || []).filter(inv => inv.status !== 'paid').length;
+      const totalCustomers = (customers || []).length;
+      const lowStockCount = (products || []).filter(p => p.stock_quantity <= p.min_stock_level).length;
+
+      setStats([
+        { name: 'Total Sales', value: totalSales, change: '+12.5%', icon: TrendingUp, color: 'blue' },
+        { name: 'Active Orders', value: activeOrders, change: '+5', icon: Clock, color: 'orange' },
+        { name: 'Total Customers', value: totalCustomers, change: '+18', icon: Users, color: 'green' },
+        { name: 'Low Stock Items', value: lowStockCount, change: '-2', icon: AlertCircle, color: 'red' },
+      ]);
+
+      // 2. Process Chart Data (Last 7 Months)
+      const months = Array.from({ length: 7 }).map((_, i) => {
+        const d = subMonths(new Date(), 6 - i);
+        return format(d, 'MMM');
+      });
+
+      const processedChartData = months.map(month => {
+        const monthInvoices = (invoices || []).filter(inv => format(new Date(inv.created_at), 'MMM') === month);
+        const monthExpenses = (transactions || []).filter(t => t.type === 'expense' && format(new Date(t.date), 'MMM') === month);
+        
+        return {
+          name: month,
+          sales: monthInvoices.reduce((acc, inv) => acc + inv.total_amount, 0),
+          expenses: monthExpenses.reduce((acc, exp) => acc + exp.amount, 0)
+        };
+      });
+      setChartData(processedChartData);
+
+      // 3. Recent Transactions
+      const recent = (invoices || [])
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+        .slice(0, 4)
+        .map(inv => ({
+          id: inv.invoice_number || 'INV-NEW',
+          customer: (Array.isArray(inv.customer) ? inv.customer[0]?.name : inv.customer?.name) || 'Walk-in Customer',
+          amount: inv.total_amount,
+          status: inv.status,
+          date: format(new Date(inv.created_at), 'yyyy-MM-dd')
+        }));
+      setRecentTransactions(recent);
+
+      // 4. Low Stock Items
+      const lowStock = (products || [])
+        .filter(p => p.stock_quantity <= p.min_stock_level)
+        .slice(0, 3)
+        .map(p => ({
+          name: p.name,
+          stock: p.stock_quantity,
+          min: p.min_stock_level,
+          unit: p.unit
+        }));
+      setLowStockItems(lowStock);
+
+    } catch (error: any) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
   return (
     <div className="space-y-8">
       {/* Header Section */}
@@ -63,10 +135,13 @@ export default function DashboardPage() {
           <button className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-lg text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors shadow-sm">
             Download Report
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20">
+          <Link 
+            href="/pos-furniture"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition-colors shadow-lg shadow-blue-500/20"
+          >
             <Plus className="w-4 h-4" />
             New Invoice
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -94,7 +169,7 @@ export default function DashboardPage() {
             </div>
             <p className="text-sm font-medium text-slate-500">{stat.name}</p>
             <h3 className="text-2xl font-bold text-slate-900 mt-1">
-              {typeof stat.value === 'number' && stat.name.includes('Sales') 
+              {stat.name.includes('Sales') 
                 ? formatCurrency(stat.value) 
                 : stat.value}
             </h3>
@@ -114,7 +189,7 @@ export default function DashboardPage() {
           </div>
           <div className="h-[300px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={data}>
+              <AreaChart data={chartData}>
                 <defs>
                   <linearGradient id="colorSales" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="#2563eb" stopOpacity={0.1}/>
@@ -162,7 +237,9 @@ export default function DashboardPage() {
         <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
           <h3 className="text-lg font-bold text-slate-900 mb-6">Recent Transactions</h3>
           <div className="space-y-4">
-            {recentTransactions.map((tx) => (
+            {recentTransactions.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-10">No recent transactions.</p>
+            ) : recentTransactions.map((tx) => (
               <div key={tx.id} className="flex items-center justify-between p-3 hover:bg-slate-50 rounded-xl transition-colors cursor-pointer group">
                 <div className="flex items-center gap-3">
                   <div className={cn(
@@ -190,9 +267,12 @@ export default function DashboardPage() {
               </div>
             ))}
           </div>
-          <button className="w-full mt-6 py-2.5 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors">
+          <Link 
+            href="/invoices"
+            className="w-full mt-6 py-2.5 text-sm font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-xl transition-colors block text-center"
+          >
             View All Transactions
-          </button>
+          </Link>
         </div>
       </div>
 
@@ -202,17 +282,21 @@ export default function DashboardPage() {
           <h3 className="text-lg font-bold text-slate-900 mb-4">Quick Actions</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             {[
-              { name: 'New Sale', icon: ShoppingCart, color: 'bg-blue-600' },
-              { name: 'Add Product', icon: Package, color: 'bg-purple-600' },
-              { name: 'Add Customer', icon: Users, color: 'bg-green-600' },
-              { name: 'Add Expense', icon: CreditCard, color: 'bg-red-600' },
+              { name: 'New Sale', icon: ShoppingCart, color: 'bg-blue-600', href: '/pos-furniture' },
+              { name: 'Add Product', icon: Package, color: 'bg-purple-600', href: '/inventory' },
+              { name: 'Add Customer', icon: Users, color: 'bg-green-600', href: '/customers' },
+              { name: 'Add Expense', icon: CreditCard, color: 'bg-red-600', href: '/transactions' },
             ].map((action) => (
-              <button key={action.name} className="flex flex-col items-center gap-3 p-4 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
+              <Link 
+                key={action.name} 
+                href={action.href}
+                className="flex flex-col items-center gap-3 p-4 rounded-2xl border border-slate-100 hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
+              >
                 <div className={cn("w-12 h-12 rounded-xl flex items-center justify-center text-white shadow-lg", action.color)}>
                   <action.icon className="w-6 h-6" />
                 </div>
                 <span className="text-xs font-bold text-slate-600 group-hover:text-slate-900">{action.name}</span>
-              </button>
+              </Link>
             ))}
           </div>
         </div>
@@ -223,11 +307,9 @@ export default function DashboardPage() {
             <span className="px-2 py-1 bg-red-50 text-red-600 text-[10px] font-bold rounded-md uppercase tracking-wider">Action Required</span>
           </div>
           <div className="space-y-3">
-            {[
-              { name: 'Teak Wood Sofa Set', stock: 2, min: 5, unit: 'pcs' },
-              { name: 'Mahogany Dining Table', stock: 1, min: 3, unit: 'pcs' },
-              { name: 'Burma Teak Logs', stock: 15, min: 50, unit: 'cft' },
-            ].map((item) => (
+            {lowStockItems.length === 0 ? (
+              <p className="text-sm text-slate-500 text-center py-10">All stock levels are healthy.</p>
+            ) : lowStockItems.map((item) => (
               <div key={item.name} className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
                 <div>
                   <p className="text-sm font-bold text-slate-900">{item.name}</p>
@@ -245,7 +327,3 @@ export default function DashboardPage() {
     </div>
   );
 }
-
-// Helper function for cn (already in utils, but just in case)
-import { cn } from '@/lib/utils';
-import { ShoppingCart } from 'lucide-react';

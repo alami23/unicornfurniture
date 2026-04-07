@@ -11,11 +11,15 @@ import {
   Plus,
   Trash2,
   Layers,
-  Tag
+  Tag,
+  Database,
+  RefreshCw,
+  CheckCircle2
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { cn } from '@/lib/utils';
 import toast from 'react-hot-toast';
+import { seedDemoData } from '@/lib/seed-data';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('profile');
@@ -86,12 +90,15 @@ export default function SettingsPage() {
     }
   };
 
+  const [showSeedConfirm, setShowSeedConfirm] = useState(false);
+
   const tabs = [
     { id: 'profile', label: 'Business Profile', icon: Building2 },
     { id: 'data', label: 'Categories & Brands', icon: Layers },
     { id: 'notifications', label: 'SMS & WhatsApp', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'localization', label: 'Localization', icon: Globe },
+    { id: 'developer', label: 'Developer Tools', icon: Database },
   ];
 
   return (
@@ -280,6 +287,67 @@ export default function SettingsPage() {
                   <select className="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20">
                     <option>Asia/Dhaka (GMT+6)</option>
                   </select>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'developer' && (
+            <div className="p-8 space-y-8">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-bold text-slate-900">Developer Tools</h3>
+              </div>
+              
+              <div className="p-6 bg-blue-50 border border-blue-100 rounded-2xl space-y-4">
+                <div className="flex items-start gap-4">
+                  <div className="p-3 bg-blue-100 rounded-xl">
+                    <Database className="w-6 h-6 text-blue-600" />
+                  </div>
+                  <div>
+                    <h4 className="font-bold text-slate-900">Seed Demo Data</h4>
+                    <p className="text-sm text-slate-600">Populate your database with sample categories, brands, products, customers, and staff for testing purposes.</p>
+                  </div>
+                </div>
+                
+                <div className="flex items-center gap-3 pt-2">
+                  {!showSeedConfirm ? (
+                    <button 
+                      onClick={() => setShowSeedConfirm(true)}
+                      className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all"
+                    >
+                      <Plus className="w-4 h-4" />
+                      Seed All Demo Data
+                    </button>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <button 
+                        onClick={async () => {
+                          setLoading(true);
+                          const result = await seedDemoData();
+                          setLoading(false);
+                          setShowSeedConfirm(false);
+                          
+                          if (result.success) {
+                            toast.success('Demo data seeded successfully!');
+                          } else {
+                            toast.error('Seeding failed: ' + result.error);
+                          }
+                        }}
+                        disabled={loading}
+                        className="flex items-center gap-2 px-6 py-2.5 bg-red-600 text-white rounded-xl text-sm font-bold hover:bg-red-700 transition-all disabled:opacity-50"
+                      >
+                        {loading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                        Confirm Seeding
+                      </button>
+                      <button 
+                        onClick={() => setShowSeedConfirm(false)}
+                        className="px-4 py-2.5 bg-slate-200 text-slate-700 rounded-xl text-sm font-bold hover:bg-slate-300 transition-all"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-slate-400 italic">Note: This will not delete existing data.</p>
                 </div>
               </div>
             </div>
