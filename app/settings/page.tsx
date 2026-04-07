@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Building2, 
   Bell, 
@@ -28,13 +28,7 @@ export default function SettingsPage() {
   const [newCatType, setNewCatType] = useState('furniture');
   const [newBrandName, setNewBrandName] = useState('');
 
-  useEffect(() => {
-    if (activeTab === 'data') {
-      fetchData();
-    }
-  }, [activeTab]);
-
-  async function fetchData() {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     const [catRes, brandRes] = await Promise.all([
       supabase.from('categories').select('*').order('name'),
@@ -43,7 +37,14 @@ export default function SettingsPage() {
     setCategories(catRes.data || []);
     setBrands(brandRes.data || []);
     setLoading(false);
-  }
+  }, []);
+
+  useEffect(() => {
+    if (activeTab === 'data') {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      fetchData();
+    }
+  }, [activeTab, fetchData]);
 
   const handleAddCategory = async () => {
     if (!newCatName) return;

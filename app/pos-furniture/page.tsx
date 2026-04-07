@@ -14,7 +14,10 @@ import {
   Printer,
   X,
   CreditCard,
-  Banknote
+  Banknote,
+  MessageSquare,
+  AlertTriangle,
+  ExternalLink
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { formatCurrency, cn } from '@/lib/utils';
@@ -458,7 +461,7 @@ export default function POSFurniturePage() {
               <div className="p-3 bg-amber-50 border border-amber-100 rounded-xl flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
                 <p className="text-xs text-amber-700 font-medium">
-                  Remaining <span className="font-bold">{formatCurrency(total - amountPaid)}</span> will be added to customer's due balance.
+                  Remaining <span className="font-bold">{formatCurrency(total - amountPaid)}</span> will be added to customer&apos;s due balance.
                 </p>
               </div>
             )}
